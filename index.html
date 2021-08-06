@@ -68,7 +68,7 @@
 
           peer.on('close', () => {
             conn = null
-            status.innerHTML = "Lost connection. Please refresh."
+            status.innerHTML = "Lost connection. Please try connecting again."
           })
 
           peer.on('error', (err) => {
@@ -86,29 +86,36 @@
           conn = peer.connect(document.getElementById("connect").value, {
             reliable: true
           })
+		  
+		  status.innerHTML = "Connecting..."
+          ready(conn)
+        }
 
-          if (conn) {
-            status.innerHTML = "Connected to: " + conn.peer
-            ready(conn)
-          }
-         }
+		const ready = (conn) => {
+		  conn.on('open', () => {
+			status.innerHTML = "Connected to: " + conn.peer
+		  })
 
-         const ready = (conn) => {
-           conn.on('open', () => {
-             status.innerHTML = "Connected to: " + conn.peer
-           })
+		  // Display received data.
+		  // TODO: Validate.
+		  conn.on('data', (data) => {
+			console.log("Data received!")
+			let view = new Uint8Array(data)
+			console.log("Width: " + view[0])
+			console.log("Height: " + view[1])
+			console.log(view)
 
-           // Display received data.
-           // TODO: Validate.
-           conn.on('data', (data) => {
-             console.log("Data received!")
-             let view = new Uint8Array(data)
-             console.log("Width: " + view[0])
-             console.log("Height: " + view[1])
-             console.log(view)
+			rcvContext.putImageData(toImgData(view, 2), 0, 0)
+		  })
+		  
+		  conn.on('disconnected', () => {
+            status.innerHTML = "Disconnected. Try to reconnect!"
+          })
 
-             rcvContext.putImageData(toImgData(view, 2), 0, 0)
-         })
+          conn.on('close', () => {
+			conn = null
+            status.innerHTML = "Lost connection. Please try connecting again."
+          })
        }
        
        // convert a bitarray to imageData that a canvas can take in
@@ -247,6 +254,7 @@
 
       canvas.onmousemove = (e) => {
         if (paint && inside) {
+          // Make sure the last point before leaving the canvas and the first point after do not connect.
           if (holdingOutside) {
             holdingOutside = false
             addClick((e.pageX - canvas.offsetLeft)/scale, (e.pageY - canvas.offsetTop)/scale)
