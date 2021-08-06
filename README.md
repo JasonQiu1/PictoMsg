@@ -21,7 +21,7 @@ Access PictoMsg quickly through https://jasonqiu1.github.io/PictoMsg or by downl
   + Display the rooms on the index page to connect to.
   + Multiple peers can connect to the rooms.
   + Message sending happens by: peer -> room (dummy peer) -> all connected peers excluding the sender.
-- Show history of all received and sent messages with timestamps in a scrolling box.
+- Show history of all received and sent messages with timestamps in a scrolling box and fix the ugly UI at the same time.
 - Setup custom ICE (or PeerJS if it supports multiple peer connections) server for assigning custom usernames. Also solves PeerJS Cloud instability. Implementation thoughts below:
   + Allow users to change default peer id to any alphanumerical text on index page.
   + If username is currently in use, notify the user and have them pick a different name.
