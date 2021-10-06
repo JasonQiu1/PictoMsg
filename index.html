@@ -1,279 +1,313 @@
 <!DOCTYPE html>
 <html>
-  <head>
-  </head>
-  <body>
+
+<head>
+</head>
+
+<body>
     <a href="https://github.com/JasonQiu1/PictoMsg" target="_blank">GitHub</a>
     <br><br>
     <div id="peer-container">
-      <div id="peer-id"></div>
-      <p>Status: <span id="status">Awaiting connection...</span></p>
-      <label for="connect">Input the other person's peer ID:</label>
-      <input id="connect" type="text">
-      <button id="connect-button" type="button">Connect!</button>
+        <div id="peer-id"></div>
+        <p>Status: <span id="status">Awaiting connection...</span></p>
+        <label for="connect">Input the other person's peer ID:</label>
+        <input id="connect" type="text">
+        <button id="connect-button" type="button">Connect!</button>
     </div>
 
     <table id="canvas-container">
-      <col>
+        <col>
         <canvas id="pictomsg" style="border: solid black; width: 660px; image-rendering: crisp-edges"></canvas>
         <col>
-          <button id="send-canvas" type="button">Send!</button>
+        <button id="send-canvas" type="button">Send!</button>
         </col>
         <col>
-          <button id="clear-canvas" type="button">Clear</button>
+        <button id="clear-canvas" type="button">Clear</button>
         </col>
-      </col>
-      <col>
+        </col>
+        <col>
         <canvas id="rcv-canvas" style="border: solid black; width: 660px; image-rendering: crisp-edges"></canvas>
-      </col>
+        </col>
     </table>
 
     <!-- Handle P2P connections -->
     <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
     <script type="text/javascript">
-      // I have no idea why this needs to be wrapped in a function to work.
-      (() => {
-        var status = document.getElementById("status")
-        var peer = null
-        var conn = null
-        
-        const initPeer = () => {
-          peer = new Peer(null, {
-            //host: 'bloogeris.me',
-            //port: 9000,
-            //path: '/pictomsg',
-            debug: 2
-          })
+        // I have no idea why this needs to be wrapped in a function to work.
+        (() => {
+            const canvasDataHeaderSize = 3;
+            var status = document.getElementById("status")
+            var peer = null
+            var conn = null
+            var conns = []
 
-          peer.on('open', (id) => {
-            document.getElementById("peer-id").innerHTML = "My peer id is: " + id
-          })
-
-          peer.on('connection', (c) => {
-            if (conn && conn.open) {
-              c.on('open', () => {
-                setTimeout(() => { c.close(); }, 500)
-              })
-              status.innerHTML = "Peer already connected to another peer."
-              return
+            // send all connected peers through a connection
+            const sendPeerIDs = (conn) => {
+				console.log("Sending peer IDs!")
+				console.log([0].concat(conns.map(c => {
+						return c.peer
+                })))
+				conn.send([0].concat(conns.map(c => {
+						return c.peer
+                })))
             }
-            conn = c
-            ready(conn)
-            status.innerHTML = "Connected to another peer."
-          })
 
-          peer.on('disconnected', () => {
-            status.innerHTML = "Disconnected. Try to reconnect!"
-          })
+            const initPeer = () => {
+                peer = new Peer(null, {
+                    //host: 'bloogeris.me',
+                    //port: 9000,
+                    //path: '/pictomsg',
+                    debug: 2
+                })
 
-          peer.on('close', () => {
-            conn = null
-            status.innerHTML = "Lost connection. Please try connecting again."
-          })
+                peer.on('open', (id) => {
+                    document.getElementById("peer-id").innerHTML = "My peer id is: " + id
+                })
 
-          peer.on('error', (err) => {
-            console.log(err)
-            alert('' + err)
-          })
-        }
+                peer.on('connection', (conn) => {
+                    conns.push(conn)
+                    ready(conn)
+                    conns.map(c=>sendPeerIDs(c))
+                    status.innerHTML = "Connected to another peer."
+                })
 
-        // Try connecting to a server.
-        const connect = () => {
-          if (conn) {
-            conn.close()
-          }
+                peer.on('disconnected', () => {
+                    status.innerHTML = "Disconnected. Try to reconnect!"
+                })
 
-          conn = peer.connect(document.getElementById("connect").value, {
-            reliable: true
-          })
-		  
-		  status.innerHTML = "Connecting..."
-          ready(conn)
-        }
+                peer.on('close', () => {
+                    conns = []
+                    status.innerHTML = "Lost connection. Please try connecting again."
+                })
 
-		const ready = (conn) => {
-		  conn.on('open', () => {
-			status.innerHTML = "Connected to: " + conn.peer
-		  })
+                peer.on('error', (err) => {
+                    console.log(err)
+                    alert('' + err)
+                })
+            }
 
-		  // Display received data.
-		  // TODO: Validate.
-		  conn.on('data', (data) => {
-			console.log("Data received!")
-			let view = new Uint8Array(data)
-			console.log("Width: " + view[0])
-			console.log("Height: " + view[1])
-			console.log(view)
+			const connectID = (peerID) => {
+				if (conns.map(c=>c.peer).includes(peerID)) {
+					console.log("Already connected to " + peerID)
+					return;
+				}
+				var conn = peer.connect(peerID, { reliable: true })
+                conns.push(conn)
+                ready(conn)
+				if (conns.length > 1) {
+					conns.map(c=>sendPeerIDs(c))
+				}
+			}
 
-			rcvContext.putImageData(toImgData(view, 2), 0, 0)
-		  })
-		  
-		  conn.on('disconnected', () => {
-            status.innerHTML = "Disconnected. Try to reconnect!"
-          })
+            // Try connecting to a server.
+            const connect = () => {
+				connectID(document.getElementById("connect").value)
+                status.innerHTML = "Connecting..."
+            }
 
-          conn.on('close', () => {
-			conn = null
-            status.innerHTML = "Lost connection. Please try connecting again."
-          })
-       }
-       
-       // convert a bitarray to imageData that a canvas can take in
-       const toImgData = (view, offset) => {
-         let receivedImg = context.createImageData(width, height)
-         let bitPos = 3
-         for (let i = offset; i < view.byteLength; i++) {
-           for (let j = 0; j < 8; j++) {
-             let bit = (view[i] & (0x1 << j)) && 255
-             receivedImg.data[bitPos] = bit
-             bitPos+=4
-           }
-         }
-         return receivedImg
-       }
-      
-       // convert the data from an imageData to a compact bitarray for sending
-       const toBitArray = (data) => {
-         // first two bytes for width and height
-         let arr = new Uint8Array((width*height)+2)
-         arr[0] = width
-         arr[1] = height
-         let arrInd = 2
-         let byteInd = 0
-         for (let i = 3; i < data.length; i+=4) {
-           if (byteInd >= 8) {
-             byteInd = 0
-             arrInd++
-           }
-           arr[arrInd] = arr[arrInd] | ((data[i]>0) << byteInd++)
-         }
-         return arr
-       }
+            const ready = (conn) => {
+                conn.on('open', () => {
+                    status.innerHTML = "Connected to: " + conn.peer
+                })
 
-       // sends the canvas to the peer
-       const sendCanvas = () => {
-         if (conn) {
-           conn.send(toBitArray(context.getImageData(0, 0, width, height).data))
-         } else {
-           alert("Not connected to a peer yet!") 
-         }
-       }
-       
-       document.getElementById("send-canvas").addEventListener('click', sendCanvas)
-       document.getElementById("connect-button").addEventListener('click', connect);
-       initPeer()
-      })()
+                // Display received data.
+                conn.on('data', (data) => {
+                    console.log("Data received!")
+					console.log(data)
+					if (data[0] == 0) {
+						console.log("Received peer ID data")
+						data.splice(0,1)
+						const connPeerIDs = conns.map(c=>c.peer)
+						data.filter(peerID => {
+								return !connPeerIDs.includes(peerID) && peerID != peer.id
+							}).map(peerID => {
+								connectID(peerID)	
+						})
+					} else {
+						console.log("Receieved canvas data")
+                    	let view = new Uint8Array(data)
+                    	console.log("Width: " + view[1])
+                    	console.log("Height: " + view[2])
+                    	console.log(view)
+
+                    	rcvContext.putImageData(toImgData(view, canvasDataHeaderSize), 0, 0)
+					}
+                })
+
+                conn.on('disconnected', () => {
+                    status.innerHTML = "Disconnected. Try to reconnect!"
+                })
+
+                conn.on('close', () => {
+                    status.innerHTML = "Lost connection. Please try connecting again."
+                    // Remove this connection from the list
+                    conns = conns.filter((obj) => {
+                        return obj != conn
+                    });
+                })
+            }
+
+            // convert a bitarray to imageData that a canvas can take in
+            const toImgData = (view, offset) => {
+                let receivedImg = context.createImageData(width, height)
+                let bitPos = 3
+                for (let i = offset; i < view.byteLength; i++) {
+                    for (let j = 0; j < 8; j++) {
+                        let bit = (view[i] & (0x1 << j)) && 255
+                        receivedImg.data[bitPos] = bit
+                        bitPos += 4
+                    }
+                }
+                return receivedImg
+            }
+
+            // convert the data from an imageData to a compact bitarray for sending
+            const toBitArray = (data) => {
+                // first byte = 1 for canvas data
+                // first two bytes for width and height
+                let arr = new Uint8Array((width * height) + canvasDataHeaderSize)
+                arr[0] = 1
+                arr[1] = width
+                arr[2] = height
+                let arrInd = canvasDataHeaderSize
+                let byteInd = 0
+                for (let i = 3; i < data.length; i += 4) {
+                    if (byteInd >= 8) {
+                        byteInd = 0
+                        arrInd++
+                    }
+                    arr[arrInd] = arr[arrInd] | ((data[i] > 0) << byteInd++)
+                }
+                return arr
+            }
+
+            // sends the canvas to the peer
+            const sendCanvas = () => {
+                if (conns.length > 0) {
+                    conns.map(conn => {
+                        conn.send(toBitArray(context.getImageData(0, 0, width, height).data))
+                    })
+                } else {
+                    alert("Not connected to a peer yet!")
+                }
+            }
+
+            document.getElementById("send-canvas").addEventListener('click', sendCanvas)
+            document.getElementById("connect-button").addEventListener('click', connect);
+            initPeer()
+        })()
     </script>
 
     <!-- Handle drawing. -->
     <script type="text/javascript">
-      var width = 220
-      var height = 110
-      var scale = 3
+        var width = 220
+        var height = 110
+        var scale = 3
 
-      canvas = document.getElementById("pictomsg")
-      canvas.width = width
-      canvas.height = height
-      context = canvas.getContext("2d")
-      context.imageSmoothingEnabled = false
+        canvas = document.getElementById("pictomsg")
+        canvas.width = width
+        canvas.height = height
+        context = canvas.getContext("2d")
+        context.imageSmoothingEnabled = false
 
-      rcvCanvas = document.getElementById("rcv-canvas")
-      rcvCanvas.width = width
-      rcvCanvas.height = height
-      rcvContext = rcvCanvas.getContext("2d")
-      rcvContext.imageSmoothingEnabled = false
+        rcvCanvas = document.getElementById("rcv-canvas")
+        rcvCanvas.width = width
+        rcvCanvas.height = height
+        rcvContext = rcvCanvas.getContext("2d")
+        rcvContext.imageSmoothingEnabled = false
 
-      var clickX = new Array()
-      var clickY = new Array()
-      var clickDrag = new Array()
-      var paint = false
-      var inside = false
-      var holdingOutside = false
+        var clickX = new Array()
+        var clickY = new Array()
+        var clickDrag = new Array()
+        var paint = false
+        var inside = false
+        var holdingOutside = false
 
-      const addClick = (x, y, dragging) => {
-        clickX.push(x)
-        clickY.push(y)
-        clickDrag.push(dragging)
-      }
-
-      const clearDrawing = () => {
-        clickX = new Array()
-        clickY = new Array()
-        clickDrag = new Array()
-        clear()
-      }
-      
-      const clear = () => {
-        context.clearRect(0, 0, width, height)
-      }
-
-      const redraw = () => {
-        context.strokeStyle = "#000000"
-        context.lineJoin = "round"
-        context.lineWidth = 1
-
-        for (let i = 0; i < clickX.length; i++) {
-          context.beginPath()
-          if (clickDrag[i] && i) {
-            context.moveTo(clickX[i-1], clickY[i-1])
-          } else {
-            context.moveTo(clickX[i], clickY[i])
-          }
-          context.lineTo(clickX[i], clickY[i])
-          context.closePath()
-          context.stroke()
+        const addClick = (x, y, dragging) => {
+            clickX.push(x)
+            clickY.push(y)
+            clickDrag.push(dragging)
         }
-      }
 
-      <!-- Draw events -->
-      inside = false
-      paint = false
-      holdingOutside = false
-
-      document.onmousedown = (e) => {
-        paint = true
-      }
-
-      canvas.onmousedown = (e) => {
-        paint = true
-        if (inside) {
-          addClick((e.pageX - canvas.offsetLeft)/scale, (e.pageY - canvas.offsetTop)/scale)
-          redraw()
+        const clearDrawing = () => {
+            clickX = new Array()
+            clickY = new Array()
+            clickDrag = new Array()
+            clear()
         }
-      }
 
-      document.onmouseup = (e) => {
+        const clear = () => {
+            context.clearRect(0, 0, width, height)
+        }
+
+        const redraw = () => {
+                context.strokeStyle = "#000000"
+                context.lineJoin = "round"
+                context.lineWidth = 1
+
+                for (let i = 0; i < clickX.length; i++) {
+                    context.beginPath()
+                    if (clickDrag[i] && i) {
+                        context.moveTo(clickX[i - 1], clickY[i - 1])
+                    } else {
+                        context.moveTo(clickX[i], clickY[i])
+                    }
+                    context.lineTo(clickX[i], clickY[i])
+                    context.closePath()
+                    context.stroke()
+                }
+            }
+
+            <!--Draw events-- >
+            inside = false
         paint = false
-      }
+        holdingOutside = false
 
-      document.onmousemove = (e) => {
-        if (paint && !inside) {
-          holdingOutside = true
+        document.onmousedown = (e) => {
+            paint = true
         }
-      }
 
-      canvas.onmousemove = (e) => {
-        if (paint && inside) {
-          // Make sure the last point before leaving the canvas and the first point after do not connect.
-          if (holdingOutside) {
-            holdingOutside = false
-            addClick((e.pageX - canvas.offsetLeft)/scale, (e.pageY - canvas.offsetTop)/scale)
-          } else {
-            addClick((e.pageX - canvas.offsetLeft)/scale, (e.pageY - canvas.offsetTop)/scale, true)
-          }
-          redraw()
+        canvas.onmousedown = (e) => {
+            paint = true
+            if (inside) {
+                addClick((e.pageX - canvas.offsetLeft) / scale, (e.pageY - canvas.offsetTop) / scale)
+                redraw()
+            }
         }
-      }
 
-      canvas.onmouseenter = (e) => {
-        inside = true
-      }
+        document.onmouseup = (e) => {
+            paint = false
+        }
 
-      canvas.onmouseleave = (e) => {
-        inside = false
-      }
+        document.onmousemove = (e) => {
+            if (paint && !inside) {
+                holdingOutside = true
+            }
+        }
 
-      document.getElementById("clear-canvas").addEventListener('click', clearDrawing)
+        canvas.onmousemove = (e) => {
+            if (paint && inside) {
+                // Make sure the last point before leaving the canvas and the first point after do not connect.
+                if (holdingOutside) {
+                    holdingOutside = false
+                    addClick((e.pageX - canvas.offsetLeft) / scale, (e.pageY - canvas.offsetTop) / scale)
+                } else {
+                    addClick((e.pageX - canvas.offsetLeft) / scale, (e.pageY - canvas.offsetTop) / scale, true)
+                }
+                redraw()
+            }
+        }
+
+        canvas.onmouseenter = (e) => {
+            inside = true
+        }
+
+        canvas.onmouseleave = (e) => {
+            inside = false
+        }
+
+        document.getElementById("clear-canvas").addEventListener('click', clearDrawing)
     </script>
-  </body>
+</body>
+
 </html>
