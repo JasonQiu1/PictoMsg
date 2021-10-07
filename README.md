@@ -5,14 +5,12 @@ Access PictoMsg quickly through https://jasonqiu1.github.io/PictoMsg or by downl
 
 
 # Current Features
-- Draw on a canvas and clear it.
-- Connect to multiple friends using their Peer IDs.
-- Send all connected friends drawings.
-- Receive all connected friends' drawings (overwrites previous received drawings).
-
+- Connect to multiple friends using their Peer IDs!
+- Draw not only messages, but also your own nickname!
+- Send and receive all connected friends drawings!
 
 # To-Do (ordered from highest priority at the top)
-- Show history of all received and sent messages with timestamps in a scrolling box and fix the ugly UI at the same time.
+- Beef up the UI to more closely mimic PictoChat
 - Figure out how to set up dummy peers as rooms like in PictoChat.
 - Setup custom ICE (or PeerJS if it supports multiple peer connections) server for assigning custom usernames. Implementation thoughts below:
   + Allow users to change default peer id to any alphanumerical text on index page.

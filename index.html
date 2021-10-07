@@ -2,6 +2,7 @@
 <html>
 
 <head>
+	<meta charset="UTF-8">
 </head>
 
 <body>
@@ -16,18 +17,16 @@
     </div>
 
     <table id="canvas-container">
-        <col>
-        <canvas id="pictomsg" style="border: solid black; width: 660px; image-rendering: crisp-edges"></canvas>
-        <col>
-        <button id="send-canvas" type="button">Send!</button>
-        </col>
-        <col>
-        <button id="clear-canvas" type="button">Clear</button>
-        </col>
-        </col>
-        <col>
-        <canvas id="rcv-canvas" style="border: solid black; width: 660px; image-rendering: crisp-edges"></canvas>
-        </col>
+        <tr>
+			<!-- Make sure new messages pop up at bottom and move up -->
+            <div id="rcv-container" style="border: solid black; width: 660px; height: 660px; overflow-y: scroll; overflow-x: hidden; display: flex; flex-direction: column-reverse"></div>
+        </td>
+        <tr>
+            <canvas id="pictomsg" style="border: solid black; width: 660px; image-rendering: crisp-edges"></canvas>
+            <button id="send-canvas" type="button">Send!</button>
+            <button id="clear-drawing" type="button">Clear</button>
+            <button id="clear-nickname" type="button">Clear nickname</button>
+        </td>
     </table>
 
     <!-- Handle P2P connections -->
@@ -36,7 +35,8 @@
         // I have no idea why this needs to be wrapped in a function to work.
         (() => {
             const canvasDataHeaderSize = 3;
-            var status = document.getElementById("status")
+            const status = document.getElementById("status")
+            const rcvContainer = document.getElementById("rcv-container")
             var peer = null
             var conn = null
             var conns = []
@@ -105,6 +105,28 @@
                 status.innerHTML = "Connecting..."
             }
 
+			const createRcvCanvas = (imgData) => {
+				var rcvCanvas = document.createElement('canvas') 
+				rcvCanvas.class = "rcv-canvas"
+				rcvCanvas.width = width
+				rcvCanvas.height = height
+				rcvCanvas.style.border = "solid black"
+				rcvCanvas.style.width = "660px"
+				rcvCanvas.style.height = "330px"
+				rcvCanvas.style.imageRendering = "crisp-edges"
+				
+				// Write the received data into the new canvas
+				rcvContext = rcvCanvas.getContext("2d")
+				rcvContext.imageSmoothingEnabled = false
+                rcvContext.putImageData(imgData, 0, 0)
+				return rcvCanvas
+			}
+
+			const addRcvCanvas = (rcvCanvas) => {
+				// Append to recieved canvas box in reverse order because of flexbox trick
+				rcvContainer.prepend(rcvCanvas)
+			}
+
             const ready = (conn) => {
                 conn.on('open', () => {
                     status.innerHTML = "Connected to: " + conn.peer
@@ -129,8 +151,11 @@
                     	console.log("Width: " + view[1])
                     	console.log("Height: " + view[2])
                     	console.log(view)
+                        
+						// Make new received canvas in the container
+						var rcvCanvas = createRcvCanvas(toImgData(view, canvasDataHeaderSize)) 
 
-                    	rcvContext.putImageData(toImgData(view, canvasDataHeaderSize), 0, 0)
+						addRcvCanvas(rcvCanvas)
 					}
                 })
 
@@ -184,8 +209,10 @@
             // sends the canvas to the peer
             const sendCanvas = () => {
                 if (conns.length > 0) {
+					var canvasImgData = context.getImageData(0, 0, width, height)
+					addRcvCanvas(createRcvCanvas(canvasImgData))
                     conns.map(conn => {
-                        conn.send(toBitArray(context.getImageData(0, 0, width, height).data))
+                        conn.send(toBitArray(canvasImgData.data))
                     })
                 } else {
                     alert("Not connected to a peer yet!")
@@ -202,6 +229,9 @@
     <script type="text/javascript">
         var width = 220
         var height = 110
+		var nickWidth = width / 4
+		var nickHeight = height / 5
+		var nickBoxColor = Math.floor(Math.random() * 3) 
         var scale = 3
 
         canvas = document.getElementById("pictomsg")
@@ -209,12 +239,6 @@
         canvas.height = height
         context = canvas.getContext("2d")
         context.imageSmoothingEnabled = false
-
-        rcvCanvas = document.getElementById("rcv-canvas")
-        rcvCanvas.width = width
-        rcvCanvas.height = height
-        rcvContext = rcvCanvas.getContext("2d")
-        rcvContext.imageSmoothingEnabled = false
 
         var clickX = new Array()
         var clickY = new Array()
@@ -229,16 +253,67 @@
             clickDrag.push(dragging)
         }
 
-        const clearDrawing = () => {
+		// clear everything in the box, including nickname
+        const clearCanvas = () => {
+            context.clearRect(0, 0, width, height)
+        }
+
+        const resetCanvas = () => {
             clickX = new Array()
             clickY = new Array()
             clickDrag = new Array()
-            clear()
+            clearCanvas()
         }
 
-        const clear = () => {
-            context.clearRect(0, 0, width, height)
-        }
+		const resetNickname = () => {
+			for (var i = 0; i < clickX.length; i++) {
+				if (clickX[i] <= nickWidth && clickY[i] <= nickHeight) {
+					clickX.splice(i,1)
+					clickY.splice(i,1)
+					if (i > 0) clickDrag[i-1] = false
+					if (i != clickX.length) clickDrag[i+1] = false 
+					clickDrag.splice(i,1)
+					i--
+				}
+			} 
+			clearNickname()
+			drawNickBox()
+			paint = false
+		}
+
+		// clear only nickname
+		const clearNickname = () => {
+			context.clearRect(0, 0, nickWidth, nickHeight)
+		}
+
+		const resetDrawing = () => {
+			for (var i = 0; i < clickX.length; i++) {
+				if (!(clickX[i] <= nickWidth && clickY[i] <= nickHeight)) {
+					clickX.splice(i,1)
+					clickY.splice(i,1)
+					if (i > 0) clickDrag[i-1] = false
+					if (i != clickX.length) clickDrag[i+1] = false 
+					clickDrag.splice(i,1)
+					i--
+				}
+			} 
+			clearDrawing()
+			drawNickBox()
+			paint = false
+		}
+		// clear everything except the nickname
+		const clearDrawing = () => {
+			// right side of nick box
+			context.clearRect(nickWidth, 0, width-nickWidth, nickHeight)	
+			// bottom of nick box
+			context.clearRect(0, nickHeight, width, height-nickHeight)
+		}
+
+		const drawNickBox = () => {
+			context.strokeStyle = "#000000"
+			context.lineWidth = 2
+			context.strokeRect(0, 0, nickWidth, nickHeight)
+		}
 
         const redraw = () => {
                 context.strokeStyle = "#000000"
@@ -306,7 +381,10 @@
             inside = false
         }
 
-        document.getElementById("clear-canvas").addEventListener('click', clearDrawing)
+        document.getElementById("clear-drawing").addEventListener('click', resetDrawing)
+        document.getElementById("clear-nickname").addEventListener('click', resetNickname)
+
+		drawNickBox()
     </script>
 </body>
 
